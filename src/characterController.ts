@@ -6,6 +6,7 @@ import {
   Vector3,
   UniversalCamera,
   Quaternion,
+  Ray,
 } from "@babylonjs/core";
 
 export class Player extends TransformNode {
@@ -21,7 +22,9 @@ export class Player extends TransformNode {
   private _yTilt: TransformNode;
 
   // const values
-  private static readonly PLAYER_SPEED = 0.45;
+  private static readonly PLAYER_SPEED: number = 0.45;
+  private static readonly JUMP_FORCE: number = 0.8;
+  private static readonly GRAVITY: number = -2.8;
   private static readonly ORIGINAL_TILT: Vector3 = new Vector3(
     0.5934119456780721,
     0,
@@ -35,6 +38,12 @@ export class Player extends TransformNode {
 
   private _moveDirection: Vector3 = new Vector3();
   private _inputAmt: number;
+
+  // gravity, ground detection, jumping
+  private _gravity: Vector3 = new Vector3();
+  private _lastGroundPos: Vector3 = Vector3.Zero();
+  private _grounded: boolean;
+  private _jumpCount: number = 1;
 
   constructor(assets, scene: Scene, shadowGenerator: ShadowGenerator, input?) {
     super("player", scene);
@@ -106,7 +115,7 @@ export class Player extends TransformNode {
 
   private _beforeRenderUpdate(): void {
     this._updateFromControls();
-    this.mesh.moveWithCollisions(this._moveDirection);
+    this._updateGroundDetection();
   }
 
   public activatePlayerCamera(): UniversalCamera {
@@ -150,7 +159,66 @@ export class Player extends TransformNode {
     return this.camera;
   }
 
-  private _floorRaycast() {
+  private _floorRaycast(
+    offsetx: number,
+    offsetz: number,
+    raycastlen: number
+  ): Vector3 {
+    let raycastFloorPos = new Vector3(
+      this.mesh.position.x + offsetx,
+      this.mesh.position.y + 0.5,
+      this.mesh.position.z + offsetz
+    );
+    let ray = new Ray(raycastFloorPos, Vector3.Up().scale(-1), raycastlen);
 
+    let predicate = function (mesh) {
+      return mesh.isPickable && mesh.isEnabled();
+    };
+
+    let pick = this.scene.pickWithRay(ray, predicate);
+
+    if (pick.hit) {
+      return pick.pickedPoint;
+    } else {
+      return Vector3.Zero();
+    }
+  }
+
+  private _isGrounded(): boolean {
+    if (this._floorRaycast(0, 0, 0.6).equals(Vector3.Zero())) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  private _updateGroundDetection(): void {
+    this._deltaTime = this.scene.getEngine().getDeltaTime() / 1000.0;
+
+    if (!this._isGrounded()) {
+      this._gravity = this._gravity.addInPlace(
+        Vector3.Up().scale(this._deltaTime * Player.GRAVITY)
+      );
+      this._grounded = false;
+    }
+
+    if (this._gravity.y < -Player.JUMP_FORCE) {
+      this._gravity.y = -Player.JUMP_FORCE;
+    }
+
+    this.mesh.moveWithCollisions(this._moveDirection.addInPlace(this._gravity));
+
+    if (this._isGrounded()) {
+      this._gravity.y = 0;
+      this._grounded = true;
+      this._lastGroundPos.copyFrom(this.mesh.position);
+
+      this._jumpCount = 1;
+    }
+
+    if (this._input.jumpKeyDown && this._jumpCount > 0) {
+      this._gravity.y = Player.JUMP_FORCE;
+      this._jumpCount--;
+    }
   }
 }
