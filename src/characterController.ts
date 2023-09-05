@@ -3,7 +3,6 @@ import {
   TransformNode,
   Mesh,
   ShadowGenerator,
-  ArcRotateCamera,
   Vector3,
   UniversalCamera,
   Quaternion,
@@ -51,6 +50,8 @@ export class Player extends TransformNode {
   }
 
   private _updateFromControls(): void {
+    this._deltaTime = this.scene.getEngine().getDeltaTime() / 1000.0;
+
     this._moveDirection = Vector3.Zero();
     this._h = this._input.horizontal; // x-axis
     this._v = this._input.vertical; // z-axis
@@ -147,5 +148,9 @@ export class Player extends TransformNode {
 
     this.scene.activeCamera = this.camera;
     return this.camera;
+  }
+
+  private _floorRaycast() {
+
   }
 }
