@@ -17,6 +17,7 @@ import {
   Color3,
   PointLight,
   ShadowGenerator,
+  SceneLoader,
 } from "@babylonjs/core";
 import { Inspector } from "@babylonjs/inspector";
 import { AdvancedDynamicTexture, Button, Control } from "@babylonjs/gui";
@@ -170,20 +171,20 @@ class App {
     const cutScene = AdvancedDynamicTexture.CreateFullscreenUI("UI");
     cutScene.idealHeight = 720;
 
-    const next = Button.CreateSimpleButton("next", "NEXT");
-    next.color = "white";
-    next.thickness = 0;
-    next.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-    next.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
-    next.width = "64px";
-    next.height = "64px";
-    next.top = "-3%";
-    next.left = "-12%";
-    cutScene.addControl(next);
+    // const next = Button.CreateSimpleButton("next", "NEXT");
+    // next.color = "white";
+    // next.thickness = 0;
+    // next.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    // next.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    // next.width = "64px";
+    // next.height = "64px";
+    // next.top = "-3%";
+    // next.left = "-12%";
+    // cutScene.addControl(next);
 
-    next.onPointerUpObservable.add(() => {
-      this._goToGame();
-    });
+    // next.onPointerUpObservable.add(() => {
+    //   this._goToGame();
+    // });
 
     await this._cutScene.whenReadyAsync();
     this._scene.dispose();
@@ -193,6 +194,7 @@ class App {
     let finishedLoading = false;
     await this._setUpGame().then((res) => {
       finishedLoading = true;
+      this._goToGame();
     });
   }
 
@@ -227,12 +229,17 @@ class App {
       scene.detachControl();
     });
 
+    // --INPUT--
     this._input = new PlayerInput(scene);
 
     await this._initializeGameAsync(scene);
 
+    // --WHEN SCENE FINISHED LOADING--
     await scene.whenReadyAsync();
-    scene.getMeshByName("outer").position = new Vector3(0, 3, 0);
+
+    scene.getMeshByName("outer").position = scene
+      .getTransformNodeByName("startPosition")
+      .getAbsolutePosition();
 
     this._scene.dispose();
     this._state = State.GAME;
@@ -289,43 +296,26 @@ class App {
 
       outer.rotationQuaternion = new Quaternion(0, 1, 0, 0); // rotate the player mesh 180 since we want to see the back of the player
 
-      const box = MeshBuilder.CreateBox(
-        "Small1",
-        {
-          width: 0.5,
-          depth: 0.5,
-          height: 0.25,
-          faceColors: [
-            new Color4(0, 0, 0, 1),
-            new Color4(0, 0, 0, 1),
-            new Color4(0, 0, 0, 1),
-            new Color4(0, 0, 0, 1),
-            new Color4(0, 0, 0, 1),
-            new Color4(0, 0, 0, 1),
-          ],
-        },
+      // --IMPORTING MESH--
+      return SceneLoader.ImportMeshAsync(
+        null,
+        "./models/",
+        "player.glb",
         scene
-      );
-      box.position.y = 1.5;
-      box.position.z = 1;
+      ).then((result) => {
+        const root = result.meshes[0];
+        const body = root;
+        body.parent = outer;
+        body.isPickable = false;
+        body.getChildMeshes().forEach((m) => {
+          m.isPickable = false;
+        });
 
-      const body = MeshBuilder.CreateCylinder(
-        "body",
-        { height: 3, diameterTop: 2, diameterBottom: 2 },
-        scene
-      );
-      const bodymtl = new StandardMaterial("red", scene);
-      bodymtl.diffuseColor = new Color3(0.8, 0.5, 0.5);
-      body.material = bodymtl;
-      body.isPickable = false;
-      body.bakeTransformIntoVertices(Matrix.Translation(0, 1.5, 0));
-
-      box.parent = body;
-      body.parent = outer;
-
-      return {
-        mesh: outer as Mesh,
-      };
+        return {
+          mesh: outer as Mesh,
+          animationGroups: result.animationGroups,
+        };
+      });
     }
 
     return loadCharacter().then((assets) => {
